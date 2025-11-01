@@ -1,0 +1,70 @@
+type Participant @entity {
+  id: ID!
+  address: String!
+  totalFlexoes: BigInt!
+  totalAbdominais: BigInt!
+  totalKm: BigInt!
+  totalDeposited: BigInt!
+  hasCompletedChallenge: Boolean!
+  seasonId: BigInt!
+  hasWithdrawn: Boolean!
+  withdrawnAmount: BigInt!
+  createdAt: BigInt!
+  updatedAt: BigInt!
+  exercises: [Exercise!]! @derivedFrom(field: "participant")
+  deposits: [Deposit!]! @derivedFrom(field: "participant")
+  goalCompletions: [GoalCompletion!]! @derivedFrom(field: "participant")
+  withdrawals: [Withdrawal!]! @derivedFrom(field: "participant")
+}
+
+type Exercise @entity {
+  id: ID!
+  participant: Participant!
+  flexoes: BigInt!
+  abdominais: BigInt!
+  km: BigInt!
+  mensagemMotivacional: String!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: String!
+}
+
+type Deposit @entity {
+  id: ID!
+  participant: Participant!
+  amount: BigInt!
+  seasonId: BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: String!
+}
+
+type GoalCompletion @entity {
+  id: ID!
+  participant: Participant!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: String!
+}
+
+type Withdrawal @entity {
+  id: ID!
+  participant: Participant!
+  amount: BigInt!
+  completedChallenge: Boolean!
+  seasonId: BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: String!
+}
+
+type GlobalStats @entity {
+  id: ID!
+  totalFlexoes: BigInt!
+  totalAbdominais: BigInt!
+  totalKm: BigInt!
+  totalParticipants: BigInt!
+  totalDeposits: BigInt!
+  currentSeasonId: BigInt!
+  updatedAt: BigInt!
+}

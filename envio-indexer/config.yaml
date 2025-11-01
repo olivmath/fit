@@ -1,0 +1,20 @@
+name: FitnessChallenge
+description: Indexes ChallengePool events for the fitness challenge dApp
+
+networks:
+  - id: 421614  # Arbitrum Sepolia testnet
+    start_block: 0  # Will be updated after contract deployment
+    contracts:
+      - name: ChallengePool
+        address: "0x0000000000000000000000000000000000000000"  # Will be updated after deployment
+
+contracts:
+  - name: ChallengePool
+    abi_file_path: ./abis/ChallengePool.json
+    handler: ./src/EventHandlers.ts
+    events:
+      - event: "DepositoRealizado(address indexed user, uint256 amount, uint256 seasonId)"
+      - event: "ExerciciosAdicionados(address indexed user, uint256 flexoes, uint256 abdominais, uint256 kmCorrida, string mensagemMotivacional)"
+      - event: "MetaBatida(address indexed user)"
+      - event: "SaqueRealizado(address indexed user, uint256 amount, bool completedChallenge, uint256 seasonId)"
+      - event: "NovaTemporadaIniciada(uint256 indexed seasonId, uint256 startBlock, uint256 endBlock)"

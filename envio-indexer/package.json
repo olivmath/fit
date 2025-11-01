@@ -1,0 +1,30 @@
+{
+  "name": "fitness-challenge-indexer",
+  "version": "1.0.0",
+  "description": "ENVIO indexer for ChallengePool contract events",
+  "main": "dist/index.js",
+  "scripts": {
+    "install": "pnpm install",
+    "codegen": "envio codegen",
+    "dev": "envio dev",
+    "build": "envio build",
+    "start": "envio start",
+    "stop": "envio stop",
+    "test": "envio test"
+  },
+  "keywords": [
+    "blockchain",
+    "indexer",
+    "arbitrum",
+    "fitness",
+    "challenge"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@envio-dev/envio": "latest"
+  },
+  "pnpm": {
+    "overrides": {}
+  }
+}
