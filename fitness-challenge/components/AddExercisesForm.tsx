@@ -44,11 +44,11 @@ export function AddExercisesForm() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="form-control">
             <label className="label">
-              <span className="label-text">Flexões</span>
+              <span className="label-text">Push-ups</span>
             </label>
             <input
               type="number"
-              placeholder="Enter number of pushups"
+              placeholder="Enter number of push-ups"
               className="input input-bordered"
               value={flexoes}
               onChange={(e) => setFlexoes(e.target.value)}
@@ -58,7 +58,7 @@ export function AddExercisesForm() {
 
           <div className="form-control">
             <label className="label">
-              <span className="label-text">Abdominais</span>
+              <span className="label-text">Sit-ups</span>
             </label>
             <input
               type="number"
@@ -72,7 +72,7 @@ export function AddExercisesForm() {
 
           <div className="form-control">
             <label className="label">
-              <span className="label-text">Corrida (km)</span>
+              <span className="label-text">Running (km)</span>
             </label>
             <input
               type="number"

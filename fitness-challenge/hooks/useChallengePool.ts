@@ -16,11 +16,13 @@ export function useTotalExercises() {
     },
   });
 
+  const result = data as unknown as [bigint, bigint, bigint, bigint] | undefined;
+
   return {
-    totalFlex: (data?.[0] as bigint) || 0n,
-    totalAbd: (data?.[1] as bigint) || 0n,
-    totalKm: (data?.[2] as bigint) || 0n,
-    participantsCount: (data?.[3] as bigint) || 0n,
+    totalFlex: result?.[0] || 0n,
+    totalAbd: result?.[1] || 0n,
+    totalKm: result?.[2] || 0n,
+    participantsCount: result?.[3] || 0n,
     isLoading,
   };
 }
@@ -36,8 +38,9 @@ export function useChallengeDates() {
     },
   });
 
-  const startDate = (data?.[0] as bigint) || 0n;
-  const endDate = (data?.[1] as bigint) || 0n;
+  const result = data as unknown as [bigint, bigint] | undefined;
+  const startDate = result?.[0] || 0n;
+  const endDate = result?.[1] || 0n;
   const now = BigInt(Math.floor(Date.now() / 1000));
   const hasEnded = now >= endDate;
 
@@ -46,6 +49,25 @@ export function useChallengeDates() {
     endDate,
     now,
     hasEnded,
+    isLoading,
+  };
+}
+
+export function useContractBalance() {
+  const { data, isLoading } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: ABI as any,
+    functionName: 'getContractBalance',
+    query: {
+      refetchInterval: 5000,
+      staleTime: 0,
+    },
+  });
+
+  const balance = (data as unknown as bigint) || 0n;
+
+  return {
+    balance,
     isLoading,
   };
 }
@@ -91,22 +113,29 @@ export function useLeaderboards() {
     },
   });
 
+  type LeaderboardResult = [`0x${string}`[], bigint[]] | undefined;
+
+  const geral = leaderboardGeral as unknown as LeaderboardResult;
+  const flexoes = leaderboardFlexoes as unknown as LeaderboardResult;
+  const abdominais = leaderboardAbdominais as unknown as LeaderboardResult;
+  const km = leaderboardKm as unknown as LeaderboardResult;
+
   return {
     leaderboardGeral: {
-      addresses: (leaderboardGeral?.[0] as `0x${string}`[]) || [],
-      values: (leaderboardGeral?.[1] as bigint[]) || [],
+      addresses: geral?.[0] || [],
+      values: geral?.[1] || [],
     },
     leaderboardFlexoes: {
-      addresses: (leaderboardFlexoes?.[0] as `0x${string}`[]) || [],
-      values: (leaderboardFlexoes?.[1] as bigint[]) || [],
+      addresses: flexoes?.[0] || [],
+      values: flexoes?.[1] || [],
     },
     leaderboardAbdominais: {
-      addresses: (leaderboardAbdominais?.[0] as `0x${string}`[]) || [],
-      values: (leaderboardAbdominais?.[1] as bigint[]) || [],
+      addresses: abdominais?.[0] || [],
+      values: abdominais?.[1] || [],
     },
     leaderboardKm: {
-      addresses: (leaderboardKm?.[0] as `0x${string}`[]) || [],
-      values: (leaderboardKm?.[1] as bigint[]) || [],
+      addresses: km?.[0] || [],
+      values: km?.[1] || [],
     },
   };
 }
@@ -127,12 +156,15 @@ export function useParticipantData(address?: `0x${string}`) {
     },
   });
 
+  type ParticipantResult = [bigint, bigint, bigint, boolean, boolean] | undefined;
+  const result = data as unknown as ParticipantResult;
+
   return {
-    flexoes: (data?.[0] as bigint) || 0n,
-    abdominais: (data?.[1] as bigint) || 0n,
-    km: (data?.[2] as bigint) || 0n,
-    bateuMeta: (data?.[3] as boolean) || false,
-    isParticipating: (data?.[4] as boolean) || false,
+    flexoes: result?.[0] || 0n,
+    abdominais: result?.[1] || 0n,
+    km: result?.[2] || 0n,
+    bateuMeta: result?.[3] || false,
+    isParticipating: result?.[4] || false,
     isLoading,
   };
 }
@@ -148,8 +180,9 @@ export function useDeposit() {
       address: CONTRACT_ADDRESS,
       abi: ABI as any,
       functionName: 'deposit',
+      args: [] as const,
       value: parseEther('0.005'),
-    });
+    } as any);
 
     setTimeout(() => {
       queryClient.invalidateQueries();
@@ -194,7 +227,8 @@ export function useDistributePrizes() {
       address: CONTRACT_ADDRESS,
       abi: ABI as any,
       functionName: 'distributePrizes',
-    });
+      args: [] as const,
+    } as any);
 
     setTimeout(() => {
       queryClient.invalidateQueries();
