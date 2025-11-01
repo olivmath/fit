@@ -1,349 +1,289 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {Season} from "./core/Season.sol";
+import {ParticipantManager} from "./core/Participant.sol";
+import {ExerciseTracker} from "./core/ExerciseTracker.sol";
+import {Withdrawal} from "./features/Withdrawal.sol";
+import {Leaderboard} from "./features/Leaderboard.sol";
+import {Constants} from "./lib/Constants.sol";
+import {Events} from "./lib/Events.sol";
+import {Participant as ParticipantStruct, WithdrawEligibility} from "./lib/Types.sol";
+
 /**
  * @title ChallengePool
- * @dev Gerencia um desafio de fitness com 3 metas: flexões, abdominais e corrida
- * Período: Novembro (1-30)
- * Depósito fixo: 0.005 ETH
- * Metas: 1000 flexões, 1000 abdominais, 100 km de corrida
+ * @dev Orquestrador principal que compõe todos os módulos
+ *
+ * Responsabilidades:
+ * - Compor módulos via composição
+ * - Expor interface pública unificada
+ * - Garantir regras de negócio
+ *
+ * Arquitetura:
+ * - Season: gerencia temporadas automáticas
+ * - ParticipantManager: armazena dados de participantes
+ * - ExerciseTracker: valida e rastreia exercícios
+ * - Withdrawal: lógica de saque
+ * - Leaderboard: gera leaderboards
  */
-contract ChallengePool {
-    // ============ CONSTANTES ============
-    uint256 public constant DEPOSIT_AMOUNT = 0.005 ether;
-    uint256 public constant FLEXOES_META = 1000;
-    uint256 public constant ABDOMINAIS_META = 1000;
-    uint256 public constant KM_META = 100;
-
-    // Período do desafio
-    uint256 public challengeStartDate;
-    uint256 public challengeEndDate;
-
-    // ============ ESTRUTURAS ============
-    struct Participant {
-        uint256 flexoes;
-        uint256 abdominais;
-        uint256 km;
-        uint256 deposito;
-        uint256 dataDeposito;
-    }
-
-    // ============ ESTADO ============
-    mapping(address => Participant) public participants;
-    address[] public participantsList;
-    mapping(address => bool) public isParticipant;
-
-    // ============ EVENTOS ============
-    event DepositoRealizado(address indexed user, uint256 amount);
-    event ExerciciosAdicionados(address indexed user, uint256 flexoes, uint256 abdominais, uint256 km, string mensagemMotivacional);
-    event MetaBatida(address indexed user);
-    event PremioDitribuido(address indexed user, uint256 amount);
-    event DesafioFinalizado();
-
+contract ChallengePool is
+    Season,
+    ParticipantManager,
+    ExerciseTracker,
+    Withdrawal,
+    Leaderboard,
+    Events
+{
     // ============ MODIFICADORES ============
-    modifier onlyDuringChallenge() {
-        require(block.timestamp >= challengeStartDate, "Desafio ainda nao comecou");
-        require(block.timestamp < challengeEndDate, "Desafio ja terminou");
+
+    /**
+     * @dev Requer que seja temporada ativa
+     */
+    modifier onlyDuringCurrentSeason() {
+        _checkAndEmitSeasonAdvance();
+        require(_isSeasonActive(), "Temporada ja terminou");
         _;
     }
 
+    /**
+     * @dev Requer que seja participante
+     */
     modifier onlyParticipant() {
         require(isParticipant[msg.sender], "Nao e um participante");
         _;
     }
 
-    modifier afterChallenge() {
-        require(block.timestamp >= challengeEndDate, "Desafio ainda esta em andamento");
+    /**
+     * @dev Requer que seja participante desta temporada
+     */
+    modifier onlyCurrentSeasonParticipant() {
+        require(
+            isParticipant[msg.sender],
+            "Nao e um participante"
+        );
+        require(
+            participants[msg.sender].seasonId == currentSeasonId,
+            "Nao participou desta temporada"
+        );
         _;
     }
 
+    // ============ FUNÇÕES INTERNAS ============
+
+    /**
+     * @dev Verifica se temporada avançou e emite evento
+     */
+    function _checkAndEmitSeasonAdvance() internal {
+        bool advanced = _checkAndAdvanceSeason();
+        if (advanced) {
+            emit NovaTemporadaIniciada(
+                currentSeasonId,
+                seasonStartBlock,
+                seasonStartBlock + Constants.SEASON_DURATION_BLOCKS
+            );
+        }
+    }
+
     // ============ CONSTRUTOR ============
-    constructor() {
-        // Para testes locais:
-        challengeStartDate = block.timestamp;
-        challengeEndDate = block.timestamp + 30 days;
-    }
-
-    // ============ FUNÇÕES PRIVADAS ============
 
     /**
-     * @dev Verifica se um participante bateu a meta
-     * Calcula on-demand, sem armazenar em storage
+     * @dev Inicializa o contrato
+     * Herda de Season (inicia temporada 1)
      */
-    function _hasCompletedChallenge(address user) private view returns (bool) {
-        if (!isParticipant[user]) {
-            return false;
-        }
-        Participant memory p = participants[user];
-        return p.flexoes >= FLEXOES_META &&
-               p.abdominais >= ABDOMINAIS_META &&
-               p.km >= KM_META;
+    constructor() Season() {
+        emit NovaTemporadaIniciada(
+            currentSeasonId,
+            seasonStartBlock,
+            seasonStartBlock + Constants.SEASON_DURATION_BLOCKS
+        );
     }
 
-    // ============ FUNÇÕES PÚBLICAS (SEM AUTENTICAÇÃO) ============
+    // ============ FUNÇÕES PÚBLICAS (PARTICIPAÇÃO) ============
 
     /**
-     * @dev Retorna os somatórios globais de exercícios
+     * @dev Usuário deposita 0.005 ETH para entrar na temporada
+     *
+     * Regra: pode depositar apenas 1x por temporada
+     * Valor: exatamente 0.005 ETH
+     * Período: apenas durante temporada ativa
      */
-    function getTotalExercises() public view returns (
-        uint256 totalFlex,
-        uint256 totalAbd,
-        uint256 totalKm,
-        uint256 participantsCount
-    ) {
-        for (uint256 i = 0; i < participantsList.length; i++) {
-            address participant = participantsList[i];
-            totalFlex += participants[participant].flexoes;
-            totalAbd += participants[participant].abdominais;
-            totalKm += participants[participant].km;
-        }
-        participantsCount = participantsList.length;
+    function deposit() public payable onlyDuringCurrentSeason {
+        require(
+            msg.value == Constants.DEPOSIT_AMOUNT,
+            "Deposito deve ser exatamente 0.005 ETH"
+        );
+        require(
+            !participatedInSeason[msg.sender][currentSeasonId],
+            "Ja participou desta temporada"
+        );
+
+        _registerParticipant(msg.sender, currentSeasonId);
+        emit DepositoRealizado(msg.sender, Constants.DEPOSIT_AMOUNT, currentSeasonId);
     }
 
-    /**
-     * @dev Retorna todos os participantes ordenados por exercício total
-     */
-    function getLeaderboardGeral() public view returns (address[] memory, uint256[] memory) {
-        if (participantsList.length == 0) {
-            return (new address[](0), new uint256[](0));
-        }
-
-        address[] memory ranked = new address[](participantsList.length);
-        uint256[] memory totals = new uint256[](participantsList.length);
-
-        // Copiar dados
-        for (uint256 i = 0; i < participantsList.length; i++) {
-            ranked[i] = participantsList[i];
-            Participant memory p = participants[ranked[i]];
-            totals[i] = p.flexoes + p.abdominais + p.km;
-        }
-
-        // Bubble sort
-        for (uint256 i = 0; i < ranked.length; i++) {
-            for (uint256 j = i + 1; j < ranked.length; j++) {
-                if (totals[j] > totals[i]) {
-                    // Swap addresses
-                    address tempAddr = ranked[i];
-                    ranked[i] = ranked[j];
-                    ranked[j] = tempAddr;
-
-                    // Swap totals
-                    uint256 tempTotal = totals[i];
-                    totals[i] = totals[j];
-                    totals[j] = tempTotal;
-                }
-            }
-        }
-
-        return (ranked, totals);
-    }
+    // ============ FUNÇÕES PÚBLICAS (EXERCÍCIOS) ============
 
     /**
-     * @dev Retorna leaderboard de flexões
-     */
-    function getLeaderboardFlexoes() public view returns (address[] memory, uint256[] memory) {
-        return _getLeaderboardByExercise(0);
-    }
-
-    /**
-     * @dev Retorna leaderboard de abdominais
-     */
-    function getLeaderboardAbdominais() public view returns (address[] memory, uint256[] memory) {
-        return _getLeaderboardByExercise(1);
-    }
-
-    /**
-     * @dev Retorna leaderboard de km
-     */
-    function getLeaderboardKm() public view returns (address[] memory, uint256[] memory) {
-        return _getLeaderboardByExercise(2);
-    }
-
-    /**
-     * @dev Função interna para gerar leaderboards por tipo de exercício
-     */
-    function _getLeaderboardByExercise(uint256 exerciseType) internal view returns (address[] memory, uint256[] memory) {
-        if (participantsList.length == 0) {
-            return (new address[](0), new uint256[](0));
-        }
-
-        address[] memory ranked = new address[](participantsList.length);
-        uint256[] memory values = new uint256[](participantsList.length);
-
-        // Copiar dados
-        for (uint256 i = 0; i < participantsList.length; i++) {
-            ranked[i] = participantsList[i];
-            Participant memory p = participants[ranked[i]];
-
-            if (exerciseType == 0) {
-                values[i] = p.flexoes;
-            } else if (exerciseType == 1) {
-                values[i] = p.abdominais;
-            } else {
-                values[i] = p.km;
-            }
-        }
-
-        // Bubble sort
-        for (uint256 i = 0; i < ranked.length; i++) {
-            for (uint256 j = i + 1; j < ranked.length; j++) {
-                if (values[j] > values[i]) {
-                    address tempAddr = ranked[i];
-                    ranked[i] = ranked[j];
-                    ranked[j] = tempAddr;
-
-                    uint256 tempVal = values[i];
-                    values[i] = values[j];
-                    values[j] = tempVal;
-                }
-            }
-        }
-
-        return (ranked, values);
-    }
-
-    /**
-     * @dev Retorna dados públicos de um participante
-     */
-    function getParticipantData(address user) public view returns (
-        uint256 flexoes,
-        uint256 abdominais,
-        uint256 km,
-        bool bateuMeta,
-        bool isParticipating
-    ) {
-        if (!isParticipant[user]) {
-            return (0, 0, 0, false, false);
-        }
-
-        Participant memory p = participants[user];
-        bool hasCompleted = _hasCompletedChallenge(user);
-
-        return (p.flexoes, p.abdominais, p.km, hasCompleted, true);
-    }
-
-    // ============ FUNÇÕES AUTENTICADAS ============
-
-    /**
-     * @dev Usuário deposita 0.005 ETH para entrar no desafio
-     */
-    function deposit() public payable onlyDuringChallenge {
-        require(msg.value == DEPOSIT_AMOUNT, "Deposito deve ser exatamente 0.005 ETH");
-        require(!isParticipant[msg.sender], "Usuario ja esta participando");
-
-        participants[msg.sender] = Participant({
-            flexoes: 0,
-            abdominais: 0,
-            km: 0,
-            deposito: msg.value,
-            dataDeposito: block.timestamp
-        });
-
-        isParticipant[msg.sender] = true;
-        participantsList.push(msg.sender);
-
-        emit DepositoRealizado(msg.sender, msg.value);
-    }
-
-    /**
-     * @dev Participante adiciona exercícios com mensagem motivacional
+     * @dev Adiciona exercícios para o usuário
+     *
      * @param flexoes Quantidade de flexões (pode ser 0)
      * @param abdominais Quantidade de abdominais (pode ser 0)
-     * @param kmCorrida Quantidade de km de corrida (pode ser 0)
-     * @param mensagemMotivacional Mensagem motivacional opcional
+     * @param km Quantidade de km (pode ser 0)
+     * @param mensagem Mensagem motivacional opcional
+     *
+     * Regra: pelo menos 1 exercício deve ser > 0
+     * Validação: cada tipo tem limite máximo (anti-spam)
+     * Evento: MetaBatida se completar todos os desafios
      */
     function addExercises(
         uint256 flexoes,
         uint256 abdominais,
-        uint256 kmCorrida,
-        string memory mensagemMotivacional
-    ) public onlyDuringChallenge onlyParticipant {
-        require(flexoes > 0 || abdominais > 0 || kmCorrida > 0, "Deve adicionar pelo menos um exercicio");
+        uint256 km,
+        string memory mensagem
+    ) public onlyDuringCurrentSeason onlyCurrentSeasonParticipant {
+        // Validar entrada
+        _validateExerciseInput(flexoes, abdominais, km);
 
-        participants[msg.sender].flexoes += flexoes;
-        participants[msg.sender].abdominais += abdominais;
-        participants[msg.sender].km += kmCorrida;
+        // Adicionar exercícios
+        _addExercises(msg.sender, flexoes, abdominais, km);
 
-        // Verifica se bateu a meta (calcula on-demand)
+        // Emitir evento de exercício adicionado
+        emit ExerciciosAdicionados(msg.sender, flexoes, abdominais, km, mensagem);
+
+        // Verificar se completou desafio
         if (_hasCompletedChallenge(msg.sender)) {
             emit MetaBatida(msg.sender);
         }
-
-        emit ExerciciosAdicionados(msg.sender, flexoes, abdominais, kmCorrida, mensagemMotivacional);
     }
 
-    // ============ FUNÇÕES DE ADMINISTRAÇÃO ============
+    // ============ FUNÇÕES PÚBLICAS (SAQUE) ============
 
     /**
-     * @dev Calcula e distribui prêmios após o fim do desafio
-     * Quem bateu a meta: recebe seu ETH + divisão do ETH de quem não bateu
-     * Quem não bateu: perde o ETH
+     * @dev Saca o depósito
+     *
+     * Regra: pode sacar se:
+     * 1. Completou todos os desafios (imediatamente), OU
+     * 2. Temporada terminou
+     *
+     * Valor: exatamente 0.005 ETH (seu depósito)
+     * Uma vez por temporada
      */
-    function distributePrizes() public afterChallenge {
-        require(participantsList.length > 0, "Nenhum participante");
+    function withdraw() public onlyParticipant {
+        _checkAndEmitSeasonAdvance();
 
-        // Contar quantos bateram a meta e total do pool
-        uint256 winnersCount = 0;
-        uint256 totalPool = 0;
+        ParticipantStruct memory p = participants[msg.sender];
 
-        for (uint256 i = 0; i < participantsList.length; i++) {
-            address participant = participantsList[i];
-            Participant memory p = participants[participant];
-            totalPool += p.deposito;
+        require(
+            !p.hasWithdrawn,
+            "Ja sacou nesta temporada"
+        );
 
-            if (_hasCompletedChallenge(participant)) {
-                winnersCount++;
-            }
-        }
+        bool hasCompleted = _hasCompletedChallenge(msg.sender);
+        bool isSeasonActive = _isSeasonActive();
 
-        require(winnersCount > 0, "Nenhum vencedor");
+        // Verificar elegibilidade
+        (bool can, ) = _canWithdraw(p, hasCompleted, isSeasonActive);
+        require(can, "Nao pode sacar ainda");
 
-        // Distribuir prêmios para vencedores
-        for (uint256 i = 0; i < participantsList.length; i++) {
-            address participant = participantsList[i];
+        // Marcar como sacado
+        _markAsWithdrawn(msg.sender);
 
-            if (_hasCompletedChallenge(participant)) {
-                uint256 prizeAmount = totalPool / winnersCount;
+        // Executar transferência
+        _executeWithdrawal(payable(msg.sender), p.depositAmount);
 
-                (bool success, ) = payable(participant).call{value: prizeAmount}("");
-                require(success, "Falha ao enviar premio");
-
-                emit PremioDitribuido(participant, prizeAmount);
-            }
-        }
-
-        emit DesafioFinalizado();
+        // Emitir evento
+        emit SaqueRealizado(msg.sender, p.depositAmount, hasCompleted, p.seasonId);
     }
 
+    // ============ FUNÇÕES PÚBLICAS (INFORMAÇÕES) ============
+
     /**
-     * @dev Define novas datas para o desafio (apenas para testes)
+     * @dev Retorna dados gerais do contrato para exibição
      */
-    function setChallengeDates(uint256 startDate, uint256 endDate) public {
-        require(startDate < endDate, "Data de inicio deve ser antes da data de fim");
-        challengeStartDate = startDate;
-        challengeEndDate = endDate;
+    function getTotalExercises()
+        public
+        view
+        returns (
+            uint256 totalFlex,
+            uint256 totalAbd,
+            uint256 totalKm,
+            uint256 participantsCount
+        )
+    {
+        return calculateTotals(currentSeasonId);
     }
 
-    // ============ FUNÇÕES DE CONSULTA ============
-
     /**
-     * @dev Retorna o saldo do contrato
+     * @dev Retorna informações da temporada atual
      */
     function getContractBalance() public view returns (uint256) {
         return address(this).balance;
     }
 
+    // ============ LEADERBOARDS ============
+
     /**
-     * @dev Retorna o número total de participantes
+     * @dev Retorna leaderboard geral (todos os exercícios)
      */
-    function getParticipantsCount() public view returns (uint256) {
-        return participantsList.length;
+    function getLeaderboardGeral()
+        public
+        view
+        returns (address[] memory, uint256[] memory)
+    {
+        return generateLeaderboard(currentSeasonId, 0);
     }
 
     /**
-     * @dev Retorna as datas do desafio
+     * @dev Retorna leaderboard de flexões
      */
-    function getChallengeDates() public view returns (uint256 start, uint256 end) {
-        return (challengeStartDate, challengeEndDate);
+    function getLeaderboardFlexoes()
+        public
+        view
+        returns (address[] memory, uint256[] memory)
+    {
+        return generateLeaderboard(currentSeasonId, 1);
+    }
+
+    /**
+     * @dev Retorna leaderboard de abdominais
+     */
+    function getLeaderboardAbdominais()
+        public
+        view
+        returns (address[] memory, uint256[] memory)
+    {
+        return generateLeaderboard(currentSeasonId, 2);
+    }
+
+    /**
+     * @dev Retorna leaderboard de km
+     */
+    function getLeaderboardKm()
+        public
+        view
+        returns (address[] memory, uint256[] memory)
+    {
+        return generateLeaderboard(currentSeasonId, 3);
+    }
+
+    // ============ HELPER FUNCTIONS ============
+
+    /**
+     * @dev Verifica se pode sacar
+     */
+    function canWithdraw(address user)
+        public
+        view
+        returns (bool canWithdraw_, string memory reason)
+    {
+        if (!isParticipant[user]) {
+            return (false, "Nao e um participante");
+        }
+
+        ParticipantStruct memory p = participants[user];
+        bool hasCompleted = _hasCompletedChallenge(user);
+        bool isSeasonActive = block.number < _getCurrentSeasonEndBlock();
+
+        return _canWithdraw(p, hasCompleted, isSeasonActive);
     }
 }
