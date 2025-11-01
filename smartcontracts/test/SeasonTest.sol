@@ -6,13 +6,16 @@ import "./BaseTest.sol";
 contract SeasonTest is BaseTest {
     function testAutomaticSeasonAdvance() public {
         // Given: temporada 1 está ativa
-        assertEq(pool.getCurrentSeasonId(), 1, "Should be season 1");
-        
+        assertEq(pool.currentSeasonId(), 1, "Should be season 1");
+
         // When: blocos avançam além da duração da temporada
         _advanceToNextSeason();
-        
+
+        // And: a transaction occurs to trigger season advance
+        _depositAs(user3);
+
         // Then: temporada avança automaticamente
-        assertEq(pool.getCurrentSeasonId(), 2, "Should advance to season 2");
+        assertEq(pool.currentSeasonId(), 2, "Should advance to season 2");
     }
     
     function testExerciseResetBetweenSeasons() public {

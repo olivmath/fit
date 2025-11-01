@@ -2,8 +2,9 @@
 pragma solidity ^0.8.20;
 
 import "./BaseTest.sol";
+import {Events} from "../src/lib/Events.sol";
 
-contract ExerciseTrackingTest is BaseTest {
+contract ExerciseTrackingTest is BaseTest, Events {
     function setUp() public override {
         super.setUp();
         _depositAs(user1);
@@ -23,9 +24,9 @@ contract ExerciseTrackingTest is BaseTest {
     function testMetaBatidaEvent() public {
         // When: usuário completa todas as metas
         vm.expectEmit(true, false, false, false);
-        emit Events.MetaBatida(user1);
-        _addExercisesAs(user1, Constants.META_FLEXOES, Constants.META_ABDOMINAIS, Constants.META_KM, "Meta completa");
-        
+        emit MetaBatida(user1);
+        _addExercisesAs(user1, Constants.FLEXOES_META, Constants.ABDOMINAIS_META, Constants.KM_META, "Meta completa");
+
         // Then: evento MetaBatida é emitido
         (,,,bool bateuMeta,,,) = pool.getParticipantData(user1);
         assertTrue(bateuMeta, "Should have completed challenge");
@@ -42,51 +43,50 @@ contract ExerciseTrackingTest is BaseTest {
     
     function testAddExercisesZeroValues() public {
         // When: usuário adiciona exercícios com valores zero
-        _addExercisesAs(user1, 0, 0, 0, "Valores zero");
+        vm.prank(user1);
         
-        // Then: transação é aceita mas não altera valores
-        (uint256 flexoes, uint256 abdominais, uint256 km,,,,) = pool.getParticipantData(user1);
-        assertEq(flexoes, 0, "Should have 0 flexoes");
-        assertEq(abdominais, 0, "Should have 0 abdominais");
-        assertEq(km, 0, "Should have 0 km");
+        // Then: transação reverte
+        vm.expectRevert("Deve adicionar pelo menos um exercicio");
+        pool.addExercises(0, 0, 0, "Valores zero");
     }
     
     function testAddExercisesExceedMaxFlexoes() public {
         // When: usuário tenta adicionar mais que o máximo de flexões
         vm.prank(user1);
-        
+
         // Then: transação reverte
-        vm.expectRevert("Valor de flexoes excede o maximo");
-        pool.addExercises(Constants.MAX_FLEXOES + 1, 0, 0, "Excede max flexoes");
+        vm.expectRevert("Muitas flexoes de uma vez");
+        pool.addExercises(Constants.MAX_FLEXOES_SUBMISSION + 1, 0, 0, "Excede max flexoes");
     }
-    
+
     function testAddExercisesExceedMaxAbdominais() public {
         // When: usuário tenta adicionar mais que o máximo de abdominais
         vm.prank(user1);
-        
+
         // Then: transação reverte
-        vm.expectRevert("Valor de abdominais excede o maximo");
-        pool.addExercises(0, Constants.MAX_ABDOMINAIS + 1, 0, "Excede max abdominais");
+        vm.expectRevert("Muitos abdominais de uma vez");
+        pool.addExercises(0, Constants.MAX_ABDOMINAIS_SUBMISSION + 1, 0, "Excede max abdominais");
     }
-    
+
     function testAddExercisesExceedMaxKm() public {
         // When: usuário tenta adicionar mais que o máximo de km
         vm.prank(user1);
-        
+
         // Then: transação reverte
-        vm.expectRevert("Valor de km excede o maximo");
-        pool.addExercises(0, 0, Constants.MAX_KM + 1, "Excede max km");
+        vm.expectRevert("Muitos km de uma vez");
+        pool.addExercises(0, 0, Constants.MAX_KM_SUBMISSION + 1, "Excede max km");
     }
     
     function testAddExercisesSeasonEnded() public {
         // Given: temporada terminou
         _advanceToNextSeason();
+        _depositAs(user2); // Trigger season advance
         
-        // When: usuário tenta adicionar exercícios na temporada anterior
+        // When: usuário da temporada anterior tenta adicionar exercícios
         vm.prank(user1);
         
         // Then: transação reverte
-        vm.expectRevert("Temporada ja terminou");
+        vm.expectRevert("Nao participou desta temporada");
         pool.addExercises(100, 200, 30, "Temporada terminada");
     }
 }

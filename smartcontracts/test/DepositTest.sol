@@ -42,13 +42,13 @@ contract DepositTest is BaseTest {
         // Given: temporada terminou
         _advanceToNextSeason();
         
-        // When: usuário tenta depositar na temporada anterior
-        vm.roll(block.number - 1); // Volta um bloco para tentar depositar na temporada anterior
-        vm.prank(user1);
+        // When: usuário deposita
+        _depositAs(user1);
         
-        // Then: transação reverte
-        vm.expectRevert("Temporada ja terminou");
-        pool.deposit{value: Constants.DEPOSIT_AMOUNT}();
+        // Then: o depósito é para a nova temporada
+        (,,,,bool isParticipating, uint256 seasonId,) = pool.getParticipantData(user1);
+        assertTrue(isParticipating, "User should be participating in the new season");
+        assertEq(seasonId, 2, "User should be in season 2");
     }
     
     function testDepositAfterWithdrawalSameSeason() public {
@@ -56,7 +56,7 @@ contract DepositTest is BaseTest {
         _depositAs(user1);
         
         // Complete challenge
-        _addExercisesAs(user1, Constants.META_FLEXOES, Constants.META_ABDOMINAIS, Constants.META_KM, "Complete challenge");
+        _addExercisesAs(user1, Constants.FLEXOES_META, Constants.ABDOMINAIS_META, Constants.KM_META, "Complete challenge");
         
         // Withdraw
         vm.prank(user1);

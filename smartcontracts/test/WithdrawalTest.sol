@@ -11,13 +11,13 @@ contract WithdrawalTest is BaseTest {
 
     function testWithdrawAfterCompletingChallenge() public {
         // Given: usuário completou o desafio
-        _addExercisesAs(user1, Constants.META_FLEXOES, Constants.META_ABDOMINAIS, Constants.META_KM, "Complete challenge");
-        
+        _addExercisesAs(user1, Constants.FLEXOES_META, Constants.ABDOMINAIS_META, Constants.KM_META, "Complete challenge");
+
         // When: usuário saca
         uint256 balanceBefore = user1.balance;
         vm.prank(user1);
         pool.withdraw();
-        
+
         // Then: usuário recebe seu depósito de volta
         assertEq(user1.balance, balanceBefore + Constants.DEPOSIT_AMOUNT, "User should receive deposit back");
         (,,,,,, bool hasWithdrawn) = pool.getParticipantData(user1);
@@ -38,7 +38,7 @@ contract WithdrawalTest is BaseTest {
     
     function testWithdrawMultipleTimes() public {
         // Given: usuário já sacou
-        _addExercisesAs(user1, Constants.META_FLEXOES, Constants.META_ABDOMINAIS, Constants.META_KM, "Complete challenge");
+        _addExercisesAs(user1, Constants.FLEXOES_META, Constants.ABDOMINAIS_META, Constants.KM_META, "Complete challenge");
         vm.prank(user1);
         pool.withdraw();
         

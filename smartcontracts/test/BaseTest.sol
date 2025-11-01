@@ -52,9 +52,9 @@ contract BaseTest is Test {
     // Helper function to check if a user has completed the challenge
     function _hasCompletedChallenge(address user) internal view returns (bool) {
         (uint256 flexoes, uint256 abdominais, uint256 km, bool bateuMeta, , , ) = pool.getParticipantData(user);
-        return bateuMeta || 
-               (flexoes >= Constants.META_FLEXOES && 
-                abdominais >= Constants.META_ABDOMINAIS && 
-                km >= Constants.META_KM);
+        return bateuMeta ||
+               (flexoes >= Constants.FLEXOES_META &&
+                abdominais >= Constants.ABDOMINAIS_META &&
+                km >= Constants.KM_META);
     }
 }
