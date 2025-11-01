@@ -161,7 +161,7 @@ export default function Dashboard() {
                     <h4 className="text-xl font-bold text-success text-center">All Goals Completed!</h4>
                     <p className="text-sm opacity-70 text-center mt-2">You&apos;re eligible for prize distribution</p>
                     <div className="divider"></div>
-                    <WithdrawButton hasEnded={hasEnded} bateuMeta={true} />
+                    <WithdrawButton isParticipating={true} bateuMeta={true} hasWithdrawn={participantData.hasWithdrawn} />
                   </>
                 ) : (
                   <>

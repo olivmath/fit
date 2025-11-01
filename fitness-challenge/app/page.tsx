@@ -5,6 +5,7 @@ import {
   useTotalExercises,
   useContractBalance,
   useParticipantData,
+  useCurrentSeasonInfo,
 } from '@/hooks/useChallengePool';
 import { TotalStats } from '@/components/TotalStats';
 import { Leaderboard } from '@/components/Leaderboard';
@@ -16,6 +17,7 @@ export default function Home() {
   const { totalFlex, totalAbd, totalKm, participantsCount } = useTotalExercises();
   const { balance: contractBalance } = useContractBalance();
   const participantData = useParticipantData(address);
+  const { seasonId, isActive } = useCurrentSeasonInfo();
 
   return (
     <main className="min-h-screen bg-base-200 p-4 md:p-6">
@@ -23,7 +25,7 @@ export default function Home() {
         <header className="text-center mb-8">
           <h1 className="text-4xl md:text-6xl font-bold mb-2">🏋️ Fitness Challenge</h1>
           <p className="text-lg text-base-content/70">
-            November - Complete 3 goals to win ETH
+            Complete 3 goals before the season ends to withdraw your deposit
           </p>
         </header>
 
@@ -55,6 +57,8 @@ export default function Home() {
               totalKm={totalKm}
               participantsCount={participantsCount}
               contractBalance={contractBalance}
+              seasonId={seasonId}
+              isSeasonActive={isActive}
             />
           </div>
 

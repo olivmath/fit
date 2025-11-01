@@ -6,6 +6,8 @@ type Props = {
   totalKm: bigint;
   participantsCount: bigint;
   contractBalance: bigint;
+  seasonId?: bigint;
+  isSeasonActive?: boolean;
 };
 
 export function TotalStats({
@@ -14,13 +16,27 @@ export function TotalStats({
   totalKm,
   participantsCount,
   contractBalance,
+  seasonId,
+  isSeasonActive,
 }: Props) {
   const ethInStake = parseFloat(formatEther(contractBalance)).toFixed(3);
 
   return (
     <div className="card bg-base-100 shadow-xl h-full">
       <div className="card-body">
-        <h2 className="card-title">Community Stats</h2>
+        <div className="flex justify-between items-center">
+          <h2 className="card-title">Community Stats</h2>
+          {seasonId && (
+            <div className="badge badge-lg badge-primary">
+              Season {seasonId.toString()}
+            </div>
+          )}
+          {isSeasonActive !== undefined && (
+            <div className={`badge badge-lg ${isSeasonActive ? 'badge-success' : 'badge-warning'}`}>
+              {isSeasonActive ? 'Active' : 'Ended'}
+            </div>
+          )}
+        </div>
         <div className="divider"></div>
         <div className="stats stats-vertical w-full flex-1">
           <div className="stat">
