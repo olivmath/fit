@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useWatchContractEvent, usePublicClient } from 'wagmi';
 import { formatEther } from 'viem';
 import ABI from '@/config/abi.json';
@@ -19,11 +19,33 @@ interface Event {
 }
 
 export function EventsFeed() {
-  const [events, setEvents] = useState<Event[]>([]);
+  // useRef to store events Map - persists across renders without causing re-render
+  const eventsMapRef = useRef<Map<string, Event>>(new Map());
+
+  // Only state needed is a counter to trigger re-renders when events change
+  const [eventCount, setEventCount] = useState(0);
   const [loading, setLoading] = useState(true);
+
   const publicClient = usePublicClient();
 
-  // Fetch historical events on mount
+  // Centralized event processor - single point of entry for all events
+  const addEvents = useCallback((newEvents: Event[]) => {
+    let hasChanges = false;
+
+    newEvents.forEach((event) => {
+      if (!eventsMapRef.current.has(event.id)) {
+        eventsMapRef.current.set(event.id, event);
+        hasChanges = true;
+      }
+    });
+
+    // Only trigger re-render if there were actual new events
+    if (hasChanges) {
+      setEventCount(eventsMapRef.current.size);
+    }
+  }, []);
+
+  // Fetch historical events once on mount
   useEffect(() => {
     const fetchHistoricalEvents = async () => {
       if (!publicClient) return;
@@ -146,22 +168,22 @@ export function EventsFeed() {
           });
         });
 
-        // Sort by blockNumber descending (newest first) - don't limit here, limit on display
-        const sorted = historicalEvents.sort((a, b) => b.blockNumber - a.blockNumber);
-
-        // Count by type
-        const countByType = sorted.reduce((acc, e) => {
-          acc[e.type] = (acc[e.type] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
+        // Count by type for debugging
+        const countByType = historicalEvents.reduce(
+          (acc, e) => {
+            acc[e.type] = (acc[e.type] || 0) + 1;
+            return acc;
+          },
+          {} as Record<string, number>
+        );
 
         console.log('Historical events fetched:', {
           total: historicalEvents.length,
           byType: countByType,
-          events: sorted.map(e => ({ id: e.id, type: e.type, blockNumber: e.blockNumber }))
         });
 
-        setEvents(sorted.slice(0, 20));
+        // Add all historical events at once
+        addEvents(historicalEvents);
         setLoading(false);
       } catch (error) {
         console.error('Failed to fetch historical events:', error);
@@ -170,7 +192,7 @@ export function EventsFeed() {
     };
 
     fetchHistoricalEvents();
-  }, [publicClient]);
+  }, [publicClient, addEvents]);
 
   // Listen for new exercise events
   useWatchContractEvent({
@@ -178,7 +200,11 @@ export function EventsFeed() {
     abi: ABI as any,
     eventName: 'ExerciciosAdicionados',
     onLogs: (logs: any[]) => {
+      if (logs.length === 0) return;
+
       console.log('New exercise event(s):', logs.length);
+      const newEvents: Event[] = [];
+
       logs.forEach((log) => {
         const args = log.args as any;
         const flexoes = Number(args?.flexoes || 0);
@@ -190,7 +216,7 @@ export function EventsFeed() {
         if (abdominais > 0) detailParts.push(`${abdominais} sit-ups`);
         if (km > 0) detailParts.push(`${km} km`);
 
-        const event: Event = {
+        newEvents.push({
           id: `exercise-${log.blockNumber}-${log.logIndex}`,
           type: 'exercise',
           user: args?.user || '',
@@ -198,16 +224,10 @@ export function EventsFeed() {
           message: args?.mensagemMotivacional || undefined,
           timestamp: Date.now(),
           blockNumber: log.blockNumber as number,
-        };
-
-        console.log('Adding exercise event:', event.id);
-        setEvents((prev) => {
-          const filtered = prev.filter((e) => e.id !== event.id);
-          const updated = [event, ...filtered].slice(0, 20);
-          console.log('Events after update:', updated.length);
-          return updated;
         });
       });
+
+      addEvents(newEvents);
     },
   });
 
@@ -217,24 +237,25 @@ export function EventsFeed() {
     abi: ABI as any,
     eventName: 'DepositoRealizado',
     onLogs: (logs: any[]) => {
+      if (logs.length === 0) return;
+
+      const newEvents: Event[] = [];
+
       logs.forEach((log) => {
         const args = log.args as any;
         const amount = args?.amount ? formatEther(args.amount) : '0';
 
-        const event: Event = {
+        newEvents.push({
           id: `deposit-${log.blockNumber}-${log.logIndex}`,
           type: 'deposit',
           user: args?.user || '',
           details: `Deposited ${amount} ETH`,
           timestamp: Date.now(),
           blockNumber: log.blockNumber as number,
-        };
-
-        setEvents((prev) => {
-          const filtered = prev.filter((e) => e.id !== event.id);
-          return [event, ...filtered].slice(0, 20);
         });
       });
+
+      addEvents(newEvents);
     },
   });
 
@@ -244,23 +265,24 @@ export function EventsFeed() {
     abi: ABI as any,
     eventName: 'MetaBatida',
     onLogs: (logs: any[]) => {
+      if (logs.length === 0) return;
+
+      const newEvents: Event[] = [];
+
       logs.forEach((log) => {
         const args = log.args as any;
 
-        const event: Event = {
+        newEvents.push({
           id: `goal-${log.blockNumber}-${log.logIndex}`,
           type: 'goal_completed',
           user: args?.user || '',
           details: 'Completed all goals!',
           timestamp: Date.now(),
           blockNumber: log.blockNumber as number,
-        };
-
-        setEvents((prev) => {
-          const filtered = prev.filter((e) => e.id !== event.id);
-          return [event, ...filtered].slice(0, 20);
         });
       });
+
+      addEvents(newEvents);
     },
   });
 
@@ -270,24 +292,25 @@ export function EventsFeed() {
     abi: ABI as any,
     eventName: 'PremioDitribuido',
     onLogs: (logs: any[]) => {
+      if (logs.length === 0) return;
+
+      const newEvents: Event[] = [];
+
       logs.forEach((log) => {
         const args = log.args as any;
         const amount = args?.amount ? formatEther(args.amount) : '0';
 
-        const event: Event = {
+        newEvents.push({
           id: `prize-${log.blockNumber}-${log.logIndex}`,
           type: 'prize_distributed',
           user: args?.user || '',
           details: `Won ${amount} ETH!`,
           timestamp: Date.now(),
           blockNumber: log.blockNumber as number,
-        };
-
-        setEvents((prev) => {
-          const filtered = prev.filter((e) => e.id !== event.id);
-          return [event, ...filtered].slice(0, 20);
         });
       });
+
+      addEvents(newEvents);
     },
   });
 
@@ -297,22 +320,30 @@ export function EventsFeed() {
     abi: ABI as any,
     eventName: 'DesafioFinalizado',
     onLogs: (logs: any[]) => {
+      if (logs.length === 0) return;
+
+      const newEvents: Event[] = [];
+
       logs.forEach((log) => {
-        const event: Event = {
+        newEvents.push({
           id: `challenge-ended-${log.blockNumber}-${log.logIndex}`,
           type: 'challenge_ended',
           details: 'Challenge has ended!',
           timestamp: Date.now(),
           blockNumber: log.blockNumber as number,
-        };
-
-        setEvents((prev) => {
-          const filtered = prev.filter((e) => e.id !== event.id);
-          return [event, ...filtered].slice(0, 20);
         });
       });
+
+      addEvents(newEvents);
     },
   });
+
+  // Derive display events from the Map - sort and limit to 20
+  const displayEvents = useMemo(() => {
+    return Array.from(eventsMapRef.current.values())
+      .sort((a, b) => b.blockNumber - a.blockNumber)
+      .slice(0, 20);
+  }, [eventCount]); // Re-compute when eventCount changes
 
   const getEventIcon = (type: string) => {
     switch (type) {
@@ -359,8 +390,8 @@ export function EventsFeed() {
             <div className="text-center py-8 opacity-50">
               <p>Loading activity...</p>
             </div>
-          ) : events.length > 0 ? (
-            events.map((event) => (
+          ) : displayEvents.length > 0 ? (
+            displayEvents.map((event) => (
               <div
                 key={event.id}
                 className={`p-3 rounded-lg flex flex-col gap-2 ${getEventColor(
