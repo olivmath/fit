@@ -28,6 +28,7 @@ CHAIN_ID = int(os.getenv('CHAIN_ID'))
 CONTRACT_SCRIPT_NAME = "Deploy.s.sol"
 TRANSACTIONS_PATH = f"broadcast/{CONTRACT_SCRIPT_NAME}/{CHAIN_ID}/run-latest.json"
 TARGET_DIR_UI = "../ui/contracts/deployedContracts.ts"
+TARGET_DIR_FITNESS_CHALLENGE = "../fitness-challenge/config/abi.json"
 
 CONTRACTS = []
 
@@ -75,6 +76,25 @@ export default deployedContracts satisfies GenericContractsDeclaration;
         ts_file.write(typescript_content)
     print_success(f"Arquivo de contratos atualizado em {TARGET_DIR_UI}")
 
+
+def generate_abi_json_for_fitness_challenge(contracts):
+    print_step("Gerando ABI JSON para fitness-challenge")
+
+    if not contracts:
+        print_warning("Nenhum contrato para gerar ABI")
+        return
+
+    # Assumindo que o primeiro contrato é ChallengePool
+    abi_data = {
+        "name": contracts[0].name,
+        "abi": contracts[0].abi
+    }
+
+    with open(TARGET_DIR_FITNESS_CHALLENGE, "w") as abi_file:
+        json.dump(abi_data, abi_file, indent=2)
+
+    print_success(f"ABI JSON gerado em {TARGET_DIR_FITNESS_CHALLENGE}")
+
 def updateABI():
     print_step("Iniciando atualização de ABIs e endereços")
 
@@ -101,6 +121,7 @@ def updateABI():
                     print_success(f"ABI de {name} carregada com sucesso")
 
     generate_typescript_for_ui(contracts)
+    generate_abi_json_for_fitness_challenge(contracts)
 
 
 
