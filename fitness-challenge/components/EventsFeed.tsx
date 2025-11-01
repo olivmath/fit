@@ -10,8 +10,8 @@ const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_CHALLENGE_POOL_ADDRESS ||
 
 interface Event {
   id: string;
-  type: 'deposit' | 'exercise' | 'goal_completed' | 'prize_distributed';
-  user: string;
+  type: 'deposit' | 'exercise' | 'goal_completed' | 'prize_distributed' | 'challenge_ended';
+  user?: string;
   details: string;
   message?: string;
   timestamp: number;
@@ -31,6 +31,7 @@ export function EventsFeed() {
       try {
         setLoading(true);
         const historicalEvents: Event[] = [];
+        console.log('Starting to fetch historical events...');
 
         // Fetch ExerciciosAdicionados events
         const exerciseEvents = await publicClient.getContractEvents({
@@ -39,6 +40,7 @@ export function EventsFeed() {
           eventName: 'ExerciciosAdicionados',
         });
 
+        console.log('ExerciciosAdicionados events:', exerciseEvents.length);
         exerciseEvents.forEach((log: any) => {
           const args = log.args as any;
           const flexoes = Number(args?.flexoes || 0);
@@ -68,6 +70,7 @@ export function EventsFeed() {
           eventName: 'DepositoRealizado',
         });
 
+        console.log('DepositoRealizado events:', depositEvents.length);
         depositEvents.forEach((log: any) => {
           const args = log.args as any;
           const amount = args?.amount ? formatEther(args.amount) : '0';
@@ -89,6 +92,7 @@ export function EventsFeed() {
           eventName: 'MetaBatida',
         });
 
+        console.log('MetaBatida events:', goalEvents.length);
         goalEvents.forEach((log: any) => {
           const args = log.args as any;
 
@@ -109,6 +113,7 @@ export function EventsFeed() {
           eventName: 'PremioDitribuido',
         });
 
+        console.log('PremioDitribuido events:', prizeEvents.length);
         prizeEvents.forEach((log: any) => {
           const args = log.args as any;
           const amount = args?.amount ? formatEther(args.amount) : '0';
@@ -123,9 +128,40 @@ export function EventsFeed() {
           });
         });
 
-        // Sort by blockNumber descending (newest first) and limit to 20
-        const sorted = historicalEvents.sort((a, b) => b.blockNumber - a.blockNumber).slice(0, 20);
-        setEvents(sorted);
+        // Fetch DesafioFinalizado events
+        const challengeEndedEvents = await publicClient.getContractEvents({
+          address: CONTRACT_ADDRESS,
+          abi: ABI as any,
+          eventName: 'DesafioFinalizado',
+        });
+
+        console.log('DesafioFinalizado events:', challengeEndedEvents.length);
+        challengeEndedEvents.forEach((log: any) => {
+          historicalEvents.push({
+            id: `challenge-ended-${log.blockNumber}-${log.logIndex}`,
+            type: 'challenge_ended',
+            details: 'Challenge has ended!',
+            timestamp: 0,
+            blockNumber: log.blockNumber as number,
+          });
+        });
+
+        // Sort by blockNumber descending (newest first) - don't limit here, limit on display
+        const sorted = historicalEvents.sort((a, b) => b.blockNumber - a.blockNumber);
+
+        // Count by type
+        const countByType = sorted.reduce((acc, e) => {
+          acc[e.type] = (acc[e.type] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
+        console.log('Historical events fetched:', {
+          total: historicalEvents.length,
+          byType: countByType,
+          events: sorted.map(e => ({ id: e.id, type: e.type, blockNumber: e.blockNumber }))
+        });
+
+        setEvents(sorted.slice(0, 20));
         setLoading(false);
       } catch (error) {
         console.error('Failed to fetch historical events:', error);
@@ -142,6 +178,7 @@ export function EventsFeed() {
     abi: ABI as any,
     eventName: 'ExerciciosAdicionados',
     onLogs: (logs: any[]) => {
+      console.log('New exercise event(s):', logs.length);
       logs.forEach((log) => {
         const args = log.args as any;
         const flexoes = Number(args?.flexoes || 0);
@@ -163,9 +200,12 @@ export function EventsFeed() {
           blockNumber: log.blockNumber as number,
         };
 
+        console.log('Adding exercise event:', event.id);
         setEvents((prev) => {
           const filtered = prev.filter((e) => e.id !== event.id);
-          return [event, ...filtered].slice(0, 20);
+          const updated = [event, ...filtered].slice(0, 20);
+          console.log('Events after update:', updated.length);
+          return updated;
         });
       });
     },
@@ -251,6 +291,29 @@ export function EventsFeed() {
     },
   });
 
+  // Listen for new challenge ended events
+  useWatchContractEvent({
+    address: CONTRACT_ADDRESS,
+    abi: ABI as any,
+    eventName: 'DesafioFinalizado',
+    onLogs: (logs: any[]) => {
+      logs.forEach((log) => {
+        const event: Event = {
+          id: `challenge-ended-${log.blockNumber}-${log.logIndex}`,
+          type: 'challenge_ended',
+          details: 'Challenge has ended!',
+          timestamp: Date.now(),
+          blockNumber: log.blockNumber as number,
+        };
+
+        setEvents((prev) => {
+          const filtered = prev.filter((e) => e.id !== event.id);
+          return [event, ...filtered].slice(0, 20);
+        });
+      });
+    },
+  });
+
   const getEventIcon = (type: string) => {
     switch (type) {
       case 'deposit':
@@ -261,6 +324,8 @@ export function EventsFeed() {
         return '🎯';
       case 'prize_distributed':
         return '🏆';
+      case 'challenge_ended':
+        return '🏁';
       default:
         return '📝';
     }
@@ -276,6 +341,8 @@ export function EventsFeed() {
         return 'bg-yellow-50 border-l-4 border-yellow-500';
       case 'prize_distributed':
         return 'bg-purple-50 border-l-4 border-purple-500';
+      case 'challenge_ended':
+        return 'bg-red-50 border-l-4 border-red-500';
       default:
         return 'bg-gray-50 border-l-4 border-gray-500';
     }
@@ -304,9 +371,11 @@ export function EventsFeed() {
                   <span className="text-xl flex-shrink-0">{getEventIcon(event.type)}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap text-sm">
-                      <span className="font-mono text-xs">
-                        {event.user.slice(0, 6)}...{event.user.slice(-4)}
-                      </span>
+                      {event.user && (
+                        <span className="font-mono text-xs">
+                          {event.user.slice(0, 6)}...{event.user.slice(-4)}
+                        </span>
+                      )}
                       <span className="opacity-70">{event.details}</span>
                     </div>
                   </div>

@@ -53,9 +53,21 @@ export function AddExercisesForm() {
 
     try {
       setLoading(true);
-      const flexoes = exerciseData.type === 'flexoes' ? BigInt(exerciseData.amount) : 0n;
-      const abdominais = exerciseData.type === 'abdominais' ? BigInt(exerciseData.amount) : 0n;
-      const km = exerciseData.type === 'km' ? BigInt(exerciseData.amount) : 0n;
+
+      // Convert amounts to BigInt
+      // For km, multiply by 10 to handle decimal values (e.g., 5.5 km = 55)
+      let flexoes = 0n;
+      let abdominais = 0n;
+      let km = 0n;
+
+      if (exerciseData.type === 'flexoes') {
+        flexoes = BigInt(Math.floor(parseFloat(exerciseData.amount) || 0));
+      } else if (exerciseData.type === 'abdominais') {
+        abdominais = BigInt(Math.floor(parseFloat(exerciseData.amount) || 0));
+      } else if (exerciseData.type === 'km') {
+        // Multiply by 10 to preserve one decimal place in blockchain storage
+        km = BigInt(Math.floor((parseFloat(exerciseData.amount) || 0) * 10));
+      }
 
       console.log('Submitting exercise:', { flexoes, abdominais, km, message: exerciseData.message });
 
@@ -222,21 +234,33 @@ export function AddExercisesForm() {
         <div className="flex gap-3 mt-8">
           <button
             onClick={handleBack}
-            className="btn btn-outline btn-lg flex-1 border-primary-content text-primary-content hover:bg-primary-content hover:text-primary"
+            disabled={loading}
+            className="btn btn-outline btn-lg flex-1 border-primary-content text-primary-content hover:bg-primary-content hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {step === 0 ? 'Cancel' : 'Back'}
           </button>
           {step < 3 ? (
-            <button onClick={handleNext} className="btn btn-lg flex-1 bg-white text-primary hover:bg-primary-content">
+            <button
+              onClick={handleNext}
+              disabled={loading}
+              className="btn btn-lg flex-1 bg-white text-primary hover:bg-primary-content disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Next
             </button>
           ) : (
             <button
               onClick={handleSubmit}
               disabled={loading}
-              className="btn btn-lg flex-1 bg-white text-primary hover:bg-primary-content"
+              className={`btn btn-lg flex-1 ${loading ? 'loading' : ''} bg-white text-primary hover:bg-primary-content disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              {loading ? 'Submitting...' : 'Submit'}
+              {loading ? (
+                <>
+                  <span className="loading loading-spinner loading-sm"></span>
+                  Submitting...
+                </>
+              ) : (
+                'Submit'
+              )}
             </button>
           )}
         </div>

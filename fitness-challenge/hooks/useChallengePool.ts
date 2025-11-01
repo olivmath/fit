@@ -185,7 +185,9 @@ export function useDeposit() {
     } as any);
 
     setTimeout(() => {
-      queryClient.invalidateQueries();
+      queryClient.invalidateQueries({
+        queryKey: [],
+      });
     }, 2000);
 
     return hash;
@@ -200,19 +202,30 @@ export function useAddExercises() {
   const queryClient = useQueryClient();
 
   const addExercises = async (flexoes: bigint, abdominais: bigint, km: bigint, mensagem: string = '') => {
-    if (!address) return;
-    const hash = await writeContractAsync({
-      address: CONTRACT_ADDRESS,
-      abi: ABI as any,
-      functionName: 'addExercises',
-      args: [flexoes, abdominais, km, mensagem],
-    } as any);
+    if (!address) {
+      throw new Error('Wallet not connected. Please connect your wallet first.');
+    }
 
-    setTimeout(() => {
-      queryClient.invalidateQueries();
-    }, 2000);
+    try {
+      const hash = await writeContractAsync({
+        address: CONTRACT_ADDRESS,
+        abi: ABI as any,
+        functionName: 'addExercises',
+        args: [flexoes, abdominais, km, mensagem],
+      } as any);
 
-    return hash;
+      // Wait for transaction to be processed
+      setTimeout(() => {
+        queryClient.invalidateQueries({
+          queryKey: [],
+        });
+      }, 2000);
+
+      return hash;
+    } catch (error: any) {
+      console.error('addExercises error:', error);
+      throw error;
+    }
   };
 
   return { addExercises };
@@ -231,7 +244,9 @@ export function useDistributePrizes() {
     } as any);
 
     setTimeout(() => {
-      queryClient.invalidateQueries();
+      queryClient.invalidateQueries({
+        queryKey: [],
+      });
     }, 2000);
 
     return hash;
