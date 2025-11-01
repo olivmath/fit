@@ -74,6 +74,11 @@
         "name": "kmCorrida",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "mensagemMotivacional",
+        "type": "string",
+        "internalType": "string"
       }
     ],
     "outputs": [],
@@ -449,6 +454,12 @@
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      },
+      {
+        "name": "mensagemMotivacional",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
       }
     ],
     "anonymous": false

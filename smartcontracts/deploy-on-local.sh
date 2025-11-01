@@ -7,5 +7,5 @@ forge script script/Deploy.s.sol:DeployScript \
     --broadcast \
     --verbosity
 
-python333 deploy.py
+python3 deploy.py
 

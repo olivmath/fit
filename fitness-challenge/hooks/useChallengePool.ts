@@ -199,14 +199,14 @@ export function useAddExercises() {
   const { address } = useAccount();
   const queryClient = useQueryClient();
 
-  const addExercises = async (flexoes: bigint, abdominais: bigint, km: bigint) => {
+  const addExercises = async (flexoes: bigint, abdominais: bigint, km: bigint, mensagem: string = '') => {
     if (!address) return;
     const hash = await writeContractAsync({
       address: CONTRACT_ADDRESS,
       abi: ABI as any,
       functionName: 'addExercises',
-      args: [flexoes, abdominais, km],
-    });
+      args: [flexoes, abdominais, km, mensagem],
+    } as any);
 
     setTimeout(() => {
       queryClient.invalidateQueries();

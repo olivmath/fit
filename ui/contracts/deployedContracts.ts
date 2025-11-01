@@ -4,7 +4,7 @@ import { GenericContractsDeclaration } from "~~/utils/fwt/contract";
 const deployedContracts = {
     31337: {
     "ChallengePool": {
-        "address": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+        "address": "0x0165878a594ca255338adfa4d48449f69242eb8f",
         "abi": [
             {
                 "type": "constructor",
@@ -81,6 +81,11 @@ const deployedContracts = {
                         "name": "kmCorrida",
                         "type": "uint256",
                         "internalType": "uint256"
+                    },
+                    {
+                        "name": "mensagemMotivacional",
+                        "type": "string",
+                        "internalType": "string"
                     }
                 ],
                 "outputs": [],
@@ -456,6 +461,12 @@ const deployedContracts = {
                         "type": "uint256",
                         "indexed": false,
                         "internalType": "uint256"
+                    },
+                    {
+                        "name": "mensagemMotivacional",
+                        "type": "string",
+                        "indexed": false,
+                        "internalType": "string"
                     }
                 ],
                 "anonymous": false

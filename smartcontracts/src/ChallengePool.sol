@@ -35,7 +35,7 @@ contract ChallengePool {
 
     // ============ EVENTOS ============
     event DepositoRealizado(address indexed user, uint256 amount);
-    event ExerciciosAdicionados(address indexed user, uint256 flexoes, uint256 abdominais, uint256 km);
+    event ExerciciosAdicionados(address indexed user, uint256 flexoes, uint256 abdominais, uint256 km, string mensagemMotivacional);
     event MetaBatida(address indexed user);
     event PremioDitribuido(address indexed user, uint256 amount);
     event DesafioFinalizado();
@@ -246,15 +246,17 @@ contract ChallengePool {
     }
 
     /**
-     * @dev Participante adiciona exercícios
+     * @dev Participante adiciona exercícios com mensagem motivacional
      * @param flexoes Quantidade de flexões (pode ser 0)
      * @param abdominais Quantidade de abdominais (pode ser 0)
      * @param kmCorrida Quantidade de km de corrida (pode ser 0)
+     * @param mensagemMotivacional Mensagem motivacional opcional
      */
     function addExercises(
         uint256 flexoes,
         uint256 abdominais,
-        uint256 kmCorrida
+        uint256 kmCorrida,
+        string memory mensagemMotivacional
     ) public onlyDuringChallenge onlyParticipant {
         require(flexoes > 0 || abdominais > 0 || kmCorrida > 0, "Deve adicionar pelo menos um exercicio");
 
@@ -267,7 +269,7 @@ contract ChallengePool {
             emit MetaBatida(msg.sender);
         }
 
-        emit ExerciciosAdicionados(msg.sender, flexoes, abdominais, kmCorrida);
+        emit ExerciciosAdicionados(msg.sender, flexoes, abdominais, kmCorrida, mensagemMotivacional);
     }
 
     // ============ FUNÇÕES DE ADMINISTRAÇÃO ============

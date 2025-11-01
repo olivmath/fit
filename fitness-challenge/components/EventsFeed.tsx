@@ -13,14 +13,130 @@ interface Event {
   type: 'deposit' | 'exercise' | 'goal_completed' | 'prize_distributed';
   user: string;
   details: string;
+  message?: string;
   timestamp: number;
+  blockNumber: number;
 }
 
 export function EventsFeed() {
   const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
   const publicClient = usePublicClient();
 
-  // Listen for exercise events
+  // Fetch historical events on mount
+  useEffect(() => {
+    const fetchHistoricalEvents = async () => {
+      if (!publicClient) return;
+
+      try {
+        setLoading(true);
+        const historicalEvents: Event[] = [];
+
+        // Fetch ExerciciosAdicionados events
+        const exerciseEvents = await publicClient.getContractEvents({
+          address: CONTRACT_ADDRESS,
+          abi: ABI as any,
+          eventName: 'ExerciciosAdicionados',
+        });
+
+        exerciseEvents.forEach((log: any) => {
+          const args = log.args as any;
+          const flexoes = Number(args?.flexoes || 0);
+          const abdominais = Number(args?.abdominais || 0);
+          const km = Number(args?.kmCorrida || 0);
+
+          let detailParts: string[] = [];
+          if (flexoes > 0) detailParts.push(`${flexoes} push-ups`);
+          if (abdominais > 0) detailParts.push(`${abdominais} sit-ups`);
+          if (km > 0) detailParts.push(`${km} km`);
+
+          historicalEvents.push({
+            id: `exercise-${log.blockNumber}-${log.logIndex}`,
+            type: 'exercise',
+            user: args?.user || '',
+            details: `Added ${detailParts.join(', ')}`,
+            message: args?.mensagemMotivacional || undefined,
+            timestamp: 0,
+            blockNumber: log.blockNumber as number,
+          });
+        });
+
+        // Fetch DepositoRealizado events
+        const depositEvents = await publicClient.getContractEvents({
+          address: CONTRACT_ADDRESS,
+          abi: ABI as any,
+          eventName: 'DepositoRealizado',
+        });
+
+        depositEvents.forEach((log: any) => {
+          const args = log.args as any;
+          const amount = args?.amount ? formatEther(args.amount) : '0';
+
+          historicalEvents.push({
+            id: `deposit-${log.blockNumber}-${log.logIndex}`,
+            type: 'deposit',
+            user: args?.user || '',
+            details: `Deposited ${amount} ETH`,
+            timestamp: 0,
+            blockNumber: log.blockNumber as number,
+          });
+        });
+
+        // Fetch MetaBatida events
+        const goalEvents = await publicClient.getContractEvents({
+          address: CONTRACT_ADDRESS,
+          abi: ABI as any,
+          eventName: 'MetaBatida',
+        });
+
+        goalEvents.forEach((log: any) => {
+          const args = log.args as any;
+
+          historicalEvents.push({
+            id: `goal-${log.blockNumber}-${log.logIndex}`,
+            type: 'goal_completed',
+            user: args?.user || '',
+            details: 'Completed all goals!',
+            timestamp: 0,
+            blockNumber: log.blockNumber as number,
+          });
+        });
+
+        // Fetch PremioDitribuido events
+        const prizeEvents = await publicClient.getContractEvents({
+          address: CONTRACT_ADDRESS,
+          abi: ABI as any,
+          eventName: 'PremioDitribuido',
+        });
+
+        prizeEvents.forEach((log: any) => {
+          const args = log.args as any;
+          const amount = args?.amount ? formatEther(args.amount) : '0';
+
+          historicalEvents.push({
+            id: `prize-${log.blockNumber}-${log.logIndex}`,
+            type: 'prize_distributed',
+            user: args?.user || '',
+            details: `Won ${amount} ETH!`,
+            timestamp: 0,
+            blockNumber: log.blockNumber as number,
+          });
+        });
+
+        // Sort by blockNumber descending (newest first) and limit to 20
+        const sorted = historicalEvents.sort((a, b) => b.blockNumber - a.blockNumber).slice(0, 20);
+        setEvents(sorted);
+        setLoading(false);
+      } catch (error) {
+        console.error('Failed to fetch historical events:', error);
+        setLoading(false);
+      }
+    };
+
+    fetchHistoricalEvents();
+  }, [publicClient]);
+
+  // Listen for new exercise events
   useWatchContractEvent({
     address: CONTRACT_ADDRESS,
     abi: ABI as any,
@@ -42,7 +158,9 @@ export function EventsFeed() {
           type: 'exercise',
           user: args?.user || '',
           details: `Added ${detailParts.join(', ')}`,
+          message: args?.mensagemMotivacional || undefined,
           timestamp: Date.now(),
+          blockNumber: log.blockNumber as number,
         };
 
         setEvents((prev) => {
@@ -53,7 +171,7 @@ export function EventsFeed() {
     },
   });
 
-  // Listen for deposit events
+  // Listen for new deposit events
   useWatchContractEvent({
     address: CONTRACT_ADDRESS,
     abi: ABI as any,
@@ -69,6 +187,7 @@ export function EventsFeed() {
           user: args?.user || '',
           details: `Deposited ${amount} ETH`,
           timestamp: Date.now(),
+          blockNumber: log.blockNumber as number,
         };
 
         setEvents((prev) => {
@@ -79,7 +198,7 @@ export function EventsFeed() {
     },
   });
 
-  // Listen for goal completed events
+  // Listen for new goal completed events
   useWatchContractEvent({
     address: CONTRACT_ADDRESS,
     abi: ABI as any,
@@ -94,6 +213,7 @@ export function EventsFeed() {
           user: args?.user || '',
           details: 'Completed all goals!',
           timestamp: Date.now(),
+          blockNumber: log.blockNumber as number,
         };
 
         setEvents((prev) => {
@@ -104,7 +224,7 @@ export function EventsFeed() {
     },
   });
 
-  // Listen for prize distributed events
+  // Listen for new prize distributed events
   useWatchContractEvent({
     address: CONTRACT_ADDRESS,
     abi: ABI as any,
@@ -120,6 +240,7 @@ export function EventsFeed() {
           user: args?.user || '',
           details: `Won ${amount} ETH!`,
           timestamp: Date.now(),
+          blockNumber: log.blockNumber as number,
         };
 
         setEvents((prev) => {
@@ -167,23 +288,34 @@ export function EventsFeed() {
         <div className="divider"></div>
 
         <div className="space-y-2 flex-1 overflow-y-auto">
-          {events.length > 0 ? (
+          {loading ? (
+            <div className="text-center py-8 opacity-50">
+              <p>Loading activity...</p>
+            </div>
+          ) : events.length > 0 ? (
             events.map((event) => (
               <div
                 key={event.id}
-                className={`p-3 rounded-lg flex items-start gap-3 ${getEventColor(
+                className={`p-3 rounded-lg flex flex-col gap-2 ${getEventColor(
                   event.type
                 )}`}
               >
-                <span className="text-xl flex-shrink-0">{getEventIcon(event.type)}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap text-sm">
-                    <span className="font-mono text-xs">
-                      {event.user.slice(0, 6)}...{event.user.slice(-4)}
-                    </span>
-                    <span className="opacity-70">{event.details}</span>
+                <div className="flex items-start gap-3">
+                  <span className="text-xl flex-shrink-0">{getEventIcon(event.type)}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap text-sm">
+                      <span className="font-mono text-xs">
+                        {event.user.slice(0, 6)}...{event.user.slice(-4)}
+                      </span>
+                      <span className="opacity-70">{event.details}</span>
+                    </div>
                   </div>
                 </div>
+                {event.message && (
+                  <div className="ml-8 text-sm italic opacity-80 bg-white/30 rounded px-2 py-1">
+                    💬 &quot;{event.message}&quot;
+                  </div>
+                )}
               </div>
             ))
           ) : (
